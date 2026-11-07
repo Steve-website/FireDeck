@@ -53,6 +53,8 @@
 <body>
 <header>
   <h1>Fire<span>Deck</span></h1>
+  <button id="navLayout" class="tab active">Layout</button>
+  <button id="navAgents" class="tab">Agents</button>
   <div id="tabs" class="tabs"></div>
   <button class="tab add" id="addpage">+ page</button>
   <div class="spacer"></div>
@@ -61,6 +63,7 @@
 </header>
 
 <main>
+  <div id="layoutPanel">
   <div class="pagesettings">
     <div class="field" style="flex:1;min-width:180px">
       <label>Page name</label>
@@ -77,9 +80,20 @@
     <button id="delpage" class="danger">Delete page</button>
   </div>
   <div id="grid" class="grid"></div>
+  </div>
+
+  <div id="agentsPanel" style="display:none">
+    <p class="hint">OpenAI-compatible endpoints shown on the tablet's Agent stats page.
+      Keys are stored in <code>server/agent.json</code> and never sent back to the browser.</p>
+    <div id="agentList" class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button id="addAgent">+ Add agent</button>
+      <button id="saveAgents" class="primary">Save agents</button>
+    </div>
+  </div>
 </main>
 
-<div class="footer">
+<div class="footer" id="layoutFooter">
   <span id="count" class="status"></span>
   <button id="save" class="primary">Save all</button>
 </div>
@@ -418,7 +432,110 @@ $("cols").onchange = function () { page().cols = parseInt(this.value, 10) || 4; 
 $("rows").onchange = function () { page().rows = parseInt(this.value, 10) || 3; renderAll(); };
 $("ptype").onchange = function () { page().kind = this.value; renderAll(); };
 
+// ---------- agents editor ----------
+var agentList = [];
+
+function setMode(m) {
+  $("layoutPanel").style.display = m === "layout" ? "" : "none";
+  $("agentsPanel").style.display = m === "agents" ? "" : "none";
+  $("tabs").style.display = m === "layout" ? "" : "none";
+  $("addpage").style.display = m === "layout" ? "" : "none";
+  $("layoutFooter").style.display = m === "layout" ? "" : "none";
+  $("navLayout").className = "tab" + (m === "layout" ? " active" : "");
+  $("navAgents").className = "tab" + (m === "agents" ? " active" : "");
+  if (m === "agents") loadAgents();
+}
+
+function loadAgents() {
+  setStatus("loading agents...");
+  fetch("/agents/config").then(function (r) { return r.json(); }).then(function (d) {
+    agentList = d.agents || [];
+    renderAgents();
+    setStatus("agents loaded", "ok");
+  }).catch(function (e) { setStatus("agents: " + e.message, "err"); });
+}
+
+function renderAgents() {
+  var box = $("agentList");
+  box.innerHTML = "";
+  if (!agentList.length) {
+    var empty = document.createElement("div");
+    empty.className = "card";
+    empty.innerHTML = "<b>No agents yet</b><div class='hint'>Click &ldquo;Add agent&rdquo; and enter an OpenAI-compatible base URL and API key.</div>";
+    box.appendChild(empty);
+    return;
+  }
+  agentList.forEach(function (a, i) {
+    var card = document.createElement("div");
+    card.className = "card";
+
+    var top = document.createElement("div");
+    top.className = "row";
+    var name = document.createElement("input");
+    name.className = "label";
+    name.value = a.name || "";
+    name.placeholder = "Name";
+    name.oninput = function () { a.name = name.value; };
+    top.appendChild(name);
+    var rm = document.createElement("button");
+    rm.className = "tiny danger";
+    rm.textContent = "Remove";
+    rm.onclick = function () { agentList.splice(i, 1); renderAgents(); };
+    top.appendChild(rm);
+    card.appendChild(top);
+
+    var bl = document.createElement("div");
+    bl.className = "hint";
+    bl.textContent = "Base URL";
+    card.appendChild(bl);
+    var base = document.createElement("input");
+    base.value = a.base || "";
+    base.placeholder = "http://192.168.1.100:8888";
+    base.oninput = function () { a.base = base.value; };
+    card.appendChild(base);
+
+    var kl = document.createElement("div");
+    kl.className = "hint";
+    kl.textContent = a.has_key
+      ? "API key (saved: " + a.key_masked + " - leave blank to keep)"
+      : "API key";
+    card.appendChild(kl);
+    var key = document.createElement("input");
+    key.type = "password";
+    key.value = "";
+    key.placeholder = a.has_key ? "unchanged" : "sk-...";
+    key.oninput = function () { a.key = key.value; };
+    card.appendChild(key);
+
+    box.appendChild(card);
+  });
+}
+
+$("navLayout").onclick = function () { setMode("layout"); };
+$("navAgents").onclick = function () { setMode("agents"); };
+
+$("addAgent").onclick = function () {
+  agentList.push({ id: "", name: "Agent " + (agentList.length + 1), base: "http://", key: "", has_key: false, key_masked: "" });
+  renderAgents();
+};
+
+$("saveAgents").onclick = function () {
+  setStatus("saving agents...");
+  fetch("/agents/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agents: agentList })
+  }).then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function () {
+    setStatus("agents saved - tablet refreshes in ~1s", "ok");
+    loadAgents();
+  }).catch(function (e) { setStatus("agents save failed: " + e.message, "err"); });
+};
+
 load();
+if (location.hash === "#agents") setMode("agents");
 </script>
 </body>
 </html>

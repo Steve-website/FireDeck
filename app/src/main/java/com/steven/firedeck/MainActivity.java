@@ -339,10 +339,16 @@ public class MainActivity extends Activity {
                     if (agentsActive) {
                         try {
                             String json = httpGet(base + "/agents");
-                            final JSONObject o = new JSONObject(json);
+                            JSONObject root = new JSONObject(json);
+                            JSONArray arr = root.optJSONArray("agents");
+                            if (arr == null) {
+                                arr = new JSONArray();
+                                arr.put(root);
+                            }
+                            final JSONArray list = arr;
                             ui.post(new Runnable() {
                                 public void run() {
-                                    agentsView.setAgent(o);
+                                    agentsView.setAgents(list);
                                 }
                             });
                         } catch (Exception ignored) {

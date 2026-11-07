@@ -411,21 +411,96 @@ def do_action(btn_def):
 
 AGENT_CONF = os.path.join(BASE, "agent.json")
 agent_lock = threading.Lock()
-AGENT = {"online": False}
+AGENTS = {}
+AGENT_ORDER = []
+AGENT_STOPS = {}
 
 
-def _agent_settings():
-    base = os.environ.get("FIRE_DECK_AGENT_BASE", "").rstrip("/")
-    key = os.environ.get("FIRE_DECK_AGENT_KEY", "")
-    if (not base or not key) and os.path.exists(AGENT_CONF):
+def _mask(key):
+    if not key:
+        return ""
+    return (key[:6] + "..." + key[-4:]) if len(key) > 12 else "****"
+
+
+def _load_agent_conf(raw=None):
+    """Return a list of {id,name,base,key} from raw data, env or agent.json."""
+    if raw is None:
+        base_env = os.environ.get("FIRE_DECK_AGENT_BASE", "").rstrip("/")
+        key_env = os.environ.get("FIRE_DECK_AGENT_KEY", "")
+        if base_env and key_env:
+            return [{"id": "default", "name": "Agent", "base": base_env, "key": key_env}]
+        if not os.path.exists(AGENT_CONF):
+            return []
         try:
             with open(AGENT_CONF, "r", encoding="utf-8") as f:
-                conf = json.load(f)
-            base = base or str(conf.get("base", "")).rstrip("/")
-            key = key or str(conf.get("key", ""))
+                raw = json.load(f)
         except Exception:
-            pass
-    return base, key
+            return []
+
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict) and isinstance(raw.get("agents"), list):
+        items = raw["agents"]
+    elif isinstance(raw, dict):
+        items = [raw]
+    else:
+        items = []
+
+    out = []
+    used = set()
+    for i, a in enumerate(items):
+        if not isinstance(a, dict):
+            continue
+        base = str(a.get("base", "")).rstrip("/")
+        if not base:
+            continue
+        aid = str(a.get("id") or "").strip() or ("agent%d" % (i + 1))
+        while aid in used:
+            aid += "_"
+        used.add(aid)
+        out.append({
+            "id": aid,
+            "name": str(a.get("name") or aid),
+            "base": base,
+            "key": str(a.get("key") or ""),
+        })
+    return out
+
+
+def _save_agent_conf(items):
+    with open(AGENT_CONF, "w", encoding="utf-8") as f:
+        json.dump({"agents": items}, f, indent=2)
+
+
+def _stop_agents():
+    with agent_lock:
+        stops = list(AGENT_STOPS.values())
+    for ev in stops:
+        ev.set()
+    time.sleep(0.2)
+    with agent_lock:
+        AGENT_STOPS.clear()
+        AGENTS.clear()
+        del AGENT_ORDER[:]
+
+
+def _start_agents():
+    items = _load_agent_conf()
+    with agent_lock:
+        del AGENT_ORDER[:]
+        for a in items:
+            AGENT_ORDER.append(a["id"])
+            AGENTS[a["id"]] = {"id": a["id"], "name": a["name"],
+                               "online": False, "error": "starting..."}
+            ev = threading.Event()
+            AGENT_STOPS[a["id"]] = ev
+            threading.Thread(target=agent_worker, args=(a, ev), daemon=True).start()
+    return items
+
+
+def restart_agents():
+    _stop_agents()
+    return _start_agents()
 
 
 def _http_text(url, key, timeout=2.5):
@@ -450,15 +525,12 @@ def _parse_metrics(text):
     return out
 
 
-def agent_loop():
-    """Polls a llama.cpp / Unsloth Studio server for live agent telemetry."""
-    global AGENT
-    base, key = _agent_settings()
-    if not base or not key:
-        with agent_lock:
-            AGENT = {"online": False,
-                     "error": "agent endpoint not configured (server/agent.json)"}
-        return
+def agent_worker(conf, stop_event):
+    """Polls one llama.cpp / Unsloth Studio server for live agent telemetry."""
+    aid = conf["id"]
+    name = conf["name"]
+    base = conf["base"]
+    key = conf["key"]
 
     prev = {}
     prev_dec = {}
@@ -467,7 +539,7 @@ def agent_loop():
     model = ""
     props_tick = 0.0
 
-    while True:
+    while not stop_event.is_set():
         now = time.time()
         try:
             met = _parse_metrics(_http_text(base + "/metrics", key))
@@ -544,6 +616,8 @@ def agent_loop():
             gauge = met.get("llamacpp:predicted_tokens_seconds", 0) or 0
 
             data = {
+                "id": aid,
+                "name": name,
                 "online": True,
                 "ts": now,
                 "state": state,
@@ -575,11 +649,11 @@ def agent_loop():
             prev = met
             prev_t = now
             with agent_lock:
-                AGENT = data
+                AGENTS[aid] = data
         except Exception as e:
             with agent_lock:
-                AGENT = {"online": False, "error": str(e)}
-        time.sleep(1.0)
+                AGENTS[aid] = {"id": aid, "name": name, "online": False, "error": str(e)}
+        stop_event.wait(1.0)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -610,9 +684,21 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/stats":
             with stats_lock:
                 self._send(200, json.dumps(STATS), "application/json")
+        elif path == "/agents/config":
+            items = _load_agent_conf()
+            safe = [{
+                "id": a["id"],
+                "name": a["name"],
+                "base": a["base"],
+                "has_key": bool(a["key"]),
+                "key_masked": _mask(a["key"]),
+            } for a in items]
+            self._send(200, json.dumps({"agents": safe}), "application/json")
         elif path == "/agents":
             with agent_lock:
-                self._send(200, json.dumps(AGENT), "application/json")
+                order = list(AGENT_ORDER)
+                data = [AGENTS[i] for i in order if i in AGENTS]
+            self._send(200, json.dumps({"agents": data}), "application/json")
         elif path == "/press":
             qs = parse_qs(parsed.query)
             try:
@@ -670,6 +756,42 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = save_layout(json.loads(raw.decode("utf-8")))
                 self._send(200, json.dumps({"ok": True, "pages": len(data["pages"])}),
+                           "application/json")
+            except Exception as e:
+                self._send(400, "bad json: %s" % e)
+
+        elif path == "/agents/config":
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length)
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+                incoming = payload.get("agents", []) if isinstance(payload, dict) else []
+                existing = {a["id"]: a for a in _load_agent_conf()}
+                out = []
+                used = set()
+                for i, a in enumerate(incoming):
+                    if not isinstance(a, dict):
+                        continue
+                    base = str(a.get("base", "")).rstrip("/")
+                    if not base:
+                        continue
+                    aid = str(a.get("id") or "").strip() or ("agent%d" % (i + 1))
+                    while aid in used:
+                        aid += "_"
+                    used.add(aid)
+                    key = str(a.get("key") or "")
+                    if not key:
+                        key = existing.get(aid, {}).get("key", "")
+                    out.append({
+                        "id": aid,
+                        "name": str(a.get("name") or aid),
+                        "base": base,
+                        "key": key,
+                    })
+                _save_agent_conf(out)
+                restart_agents()
+                print("agents updated:", ", ".join(a["name"] for a in out))
+                self._send(200, json.dumps({"ok": True, "agents": len(out)}),
                            "application/json")
             except Exception as e:
                 self._send(400, "bad json: %s" % e)
@@ -752,7 +874,7 @@ def main():
     args = ap.parse_args()
     load_layout()
     threading.Thread(target=stats_loop, daemon=True).start()
-    threading.Thread(target=agent_loop, daemon=True).start()
+    _start_agents()
     srv = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     print("FireDeck server on http://0.0.0.0:%d" % args.port)
     print("Open http://localhost:%d to configure" % args.port)

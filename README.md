@@ -32,7 +32,7 @@ Stream Deck style controller with a real touchscreen.
 - **Long-press (hold) actions** — a second action per button
 - **Macros** — multi-step sequences with delays
 - **Live PC stats overlay** — CPU, GPU, RAM, temps, network, disk
-- **Agent telemetry page** — model, TPS, context usage, tokens, requests
+- **Agent telemetry page** — one card per LLM endpoint: model, TPS, context, tokens, compactions
 - Action types: `key`, `hotkey`, `text`, `launch`, `url`, `command`, `macro`, `stats`
 - Config page: <http://localhost:9100>
 
@@ -142,10 +142,10 @@ Raw data: <http://localhost:9100/stats>
 
 ## Agent stats page
 
-A page with `"kind": "agents"` shows live telemetry from an OpenAI-compatible
-**llama.cpp / Unsloth Studio** server:
+A page with `"kind": "agents"` shows live telemetry from one or more
+OpenAI-compatible **llama.cpp / Unsloth Studio** servers — one card each:
 
-- state: `idle`, `prompt`, `working` or `streaming`
+- name and state: `idle`, `prompt`, `working`, `streaming`
 - the currently loaded model
 - live **tokens/sec** with a rolling sparkline and session average
 - **context usage** (used / window, per slot)
@@ -153,14 +153,27 @@ A page with `"kind": "agents"` shows live telemetry from an OpenAI-compatible
 - requests processing, busy slots, queue
 - compaction count (Phase 2: agent-side hooks)
 
-Configure it in `server/agent.json` (git-ignored) or with environment
-variables `FIRE_DECK_AGENT_BASE` / `FIRE_DECK_AGENT_KEY`:
+### Adding agents
+
+Open the config page → **Agents** tab → **Add agent**, enter a name, base URL
+and API key, then **Save agents**. No restart needed.
+
+<img src="docs/agents-config.png" width="840" alt="Agents editor">
+
+Keys are stored server-side in `server/agent.json` (git-ignored) and only
+masked values are shown back in the browser. Endpoints can also be set with
+`FIRE_DECK_AGENT_BASE` / `FIRE_DECK_AGENT_KEY`, or in `agent.json` directly:
 
 ```json
-{ "base": "http://your-server:8888", "key": "sk-..." }
+{
+  "agents": [
+    { "id": "homelab", "name": "HomeLab", "base": "http://192.168.1.100:8888", "key": "sk-..." },
+    { "id": "studio",  "name": "Studio",  "base": "http://192.168.1.101:8888", "key": "sk-..." }
+  ]
+}
 ```
 
-It polls `/metrics`, `/slots` and `/props` once per second.
+It polls `/metrics`, `/slots` and `/props` once per second per endpoint.
 
 ## Layout file
 

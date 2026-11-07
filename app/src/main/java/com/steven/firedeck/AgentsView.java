@@ -8,9 +8,12 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.view.View;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Live agent telemetry: state, model, TPS, context, tokens, requests. */
+import java.util.ArrayList;
+
+/** Live multi-agent telemetry: one card per configured LLM endpoint. */
 public class AgentsView extends View {
 
     private static final int C_BG = 0xFF0B0D11;
@@ -26,6 +29,26 @@ public class AgentsView extends View {
     private static final int C_RED = 0xFFEF5350;
     private static final int C_GREY = 0xFF8B93A7;
 
+    private static class Agent {
+        String name = "";
+        String model = "";
+        String state = "idle";
+        String error = "";
+        boolean online = false;
+        double tps, tpsAvg;
+        double ctxUsed, ctxTotal, ctxPct;
+        double tokOut, tokIn, tokCached;
+        int processing, deferred, busySlots, slots;
+        Integer compactions = null;
+        double[] hist = new double[60];
+        int histIdx = 0;
+        int histCount = 0;
+    }
+
+    private final ArrayList<Agent> agents = new ArrayList<Agent>();
+    private final java.util.HashMap<String, double[]> histData = new java.util.HashMap<String, double[]>();
+    private final java.util.HashMap<String, int[]> histMeta = new java.util.HashMap<String, int[]>();
+
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -39,29 +62,6 @@ public class AgentsView extends View {
     private final RectF chip = new RectF();
     private final RectF bar = new RectF();
     private final Path spark = new Path();
-
-    private boolean online = false;
-    private String error = "";
-    private String state = "idle";
-    private String model = "";
-    private double tps = 0;
-    private double tpsAvg = 0;
-    private int processing = 0;
-    private int deferred = 0;
-    private int busySlots = 0;
-    private int slots = 0;
-    private double ctxUsed = 0;
-    private double ctxTotal = 0;
-    private double ctxPct = 0;
-    private double tokOut = 0;
-    private double tokIn = 0;
-    private double tokCached = 0;
-    private Integer compactions = null;
-
-    private static final int HIST = 60;
-    private final double[] hist = new double[HIST];
-    private int histIdx = 0;
-    private int histCount = 0;
 
     public AgentsView(Context c) {
         super(c);
@@ -82,47 +82,65 @@ public class AgentsView extends View {
         return v * getResources().getDisplayMetrics().density;
     }
 
-    public void setAgent(JSONObject o) {
-        if (o == null) {
-            return;
-        }
-        try {
-            online = o.optBoolean("online", false);
-            error = o.optString("error", "");
-            state = o.optString("state", "idle");
-            model = o.optString("model", "");
-            tps = o.optDouble("tps", 0);
-            tpsAvg = o.optDouble("tps_avg", 0);
-            JSONObject req = o.optJSONObject("requests");
-            if (req != null) {
-                processing = req.optInt("processing", 0);
-                deferred = req.optInt("deferred", 0);
-                busySlots = req.optInt("busy_slots", 0);
-                slots = req.optInt("slots", 0);
+    public void setAgents(JSONArray arr) {
+        agents.clear();
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                try {
+                    JSONObject o = arr.getJSONObject(i);
+                    Agent a = new Agent();
+                    a.name = o.optString("name", "Agent");
+                    a.model = o.optString("model", "");
+                    a.state = o.optString("state", "idle");
+                    a.error = o.optString("error", "");
+                    a.online = o.optBoolean("online", false);
+                    a.tps = o.optDouble("tps", 0);
+                    a.tpsAvg = o.optDouble("tps_avg", 0);
+                    JSONObject req = o.optJSONObject("requests");
+                    if (req != null) {
+                        a.processing = req.optInt("processing", 0);
+                        a.deferred = req.optInt("deferred", 0);
+                        a.busySlots = req.optInt("busy_slots", 0);
+                        a.slots = req.optInt("slots", 0);
+                    }
+                    JSONObject ctx = o.optJSONObject("context");
+                    if (ctx != null) {
+                        a.ctxUsed = ctx.optDouble("used", 0);
+                        a.ctxTotal = ctx.optDouble("total", 0);
+                        a.ctxPct = ctx.optDouble("pct", 0);
+                    }
+                    JSONObject tok = o.optJSONObject("tokens");
+                    if (tok != null) {
+                        a.tokOut = tok.optDouble("generated", 0);
+                        a.tokIn = tok.optDouble("prompt", 0);
+                        a.tokCached = tok.optDouble("cached", 0);
+                    }
+                    a.compactions = o.isNull("compactions") ? null : o.optInt("compactions", 0);
+                    double[] hdata = histData.get(a.name);
+                    int[] hmeta = histMeta.get(a.name);
+                    if (hdata == null) {
+                        hdata = new double[60];
+                        hmeta = new int[]{0, 0};
+                        histData.put(a.name, hdata);
+                        histMeta.put(a.name, hmeta);
+                    }
+                    hdata[hmeta[0]] = a.online ? a.tps : 0;
+                    hmeta[0] = (hmeta[0] + 1) % 60;
+                    if (hmeta[1] < 60) {
+                        hmeta[1]++;
+                    }
+                    a.hist = hdata;
+                    a.histIdx = hmeta[0];
+                    a.histCount = hmeta[1];
+                    agents.add(a);
+                } catch (Exception ignored) {
+                }
             }
-            JSONObject ctx = o.optJSONObject("context");
-            if (ctx != null) {
-                ctxUsed = ctx.optDouble("used", 0);
-                ctxTotal = ctx.optDouble("total", 0);
-                ctxPct = ctx.optDouble("pct", 0);
-            }
-            JSONObject tok = o.optJSONObject("tokens");
-            if (tok != null) {
-                tokOut = tok.optDouble("generated", 0);
-                tokIn = tok.optDouble("prompt", 0);
-                tokCached = tok.optDouble("cached", 0);
-            }
-            compactions = o.isNull("compactions") ? null : o.optInt("compactions", 0);
-            hist[histIdx] = online ? tps : 0;
-            histIdx = (histIdx + 1) % HIST;
-            if (histCount < HIST) {
-                histCount++;
-            }
-        } catch (Exception ignored) {
         }
         invalidate();
     }
 
+    /** Keeps history across refreshes by name. */
     private static String kfmt(double v) {
         if (v >= 1e9) {
             return String.format("%.1fB", v / 1e9);
@@ -136,30 +154,30 @@ public class AgentsView extends View {
         return String.valueOf(Math.round(v));
     }
 
-    private int stateColor() {
-        if (!online) {
+    private int stateColor(Agent a) {
+        if (!a.online) {
             return C_RED;
         }
-        if ("streaming".equals(state)) {
+        if ("streaming".equals(a.state)) {
             return C_GREEN;
         }
-        if ("prompt".equals(state) || "working".equals(state)) {
+        if ("prompt".equals(a.state) || "working".equals(a.state)) {
             return C_AMBER;
         }
         return C_GREY;
     }
 
-    private String stateText() {
-        if (!online) {
+    private String stateText(Agent a) {
+        if (!a.online) {
             return "OFFLINE";
         }
-        if ("streaming".equals(state)) {
+        if ("streaming".equals(a.state)) {
             return "STREAMING";
         }
-        if ("prompt".equals(state)) {
+        if ("prompt".equals(a.state)) {
             return "PROMPT";
         }
-        if ("working".equals(state)) {
+        if ("working".equals(a.state)) {
             return "WORKING";
         }
         return "IDLE";
@@ -179,18 +197,18 @@ public class AgentsView extends View {
         }
     }
 
-    private void drawSpark(Canvas c, float l, float t, float r, float b, int color) {
-        if (histCount < 2) {
+    private void drawSpark(Canvas c, Agent a, float l, float t, float r, float b) {
+        if (a.histCount < 2) {
             return;
         }
         double max = 1.0;
-        for (int i = 0; i < histCount; i++) {
-            max = Math.max(max, hist[(histIdx - histCount + i + HIST) % HIST]);
+        for (int i = 0; i < a.histCount; i++) {
+            max = Math.max(max, a.hist[(a.histIdx - a.histCount + i + a.hist.length) % a.hist.length]);
         }
         spark.reset();
-        for (int i = 0; i < histCount; i++) {
-            double v = hist[(histIdx - histCount + i + HIST) % HIST];
-            float x = l + (r - l) * (histCount == 1 ? 0 : (float) i / (histCount - 1));
+        for (int i = 0; i < a.histCount; i++) {
+            double v = a.hist[(a.histIdx - a.histCount + i + a.hist.length) % a.hist.length];
+            float x = l + (r - l) * (a.histCount == 1 ? 0 : (float) i / (a.histCount - 1));
             float y = b - (b - t) * (float) (v / max);
             if (i == 0) {
                 spark.moveTo(x, y);
@@ -198,7 +216,7 @@ public class AgentsView extends View {
                 spark.lineTo(x, y);
             }
         }
-        sparkPaint.setColor(color);
+        sparkPaint.setColor(C_ACCENT);
         sparkPaint.setAlpha(220);
         c.drawPath(spark, sparkPaint);
     }
@@ -212,129 +230,169 @@ public class AgentsView extends View {
         float pad = dp(12);
         float gap = dp(12);
 
-        // header
+        int onlineCount = 0;
+        int activeCount = 0;
+        double totalTps = 0;
+        for (int i = 0; i < agents.size(); i++) {
+            Agent a = agents.get(i);
+            if (a.online) {
+                onlineCount++;
+            }
+            if (a.online && !"idle".equals(a.state)) {
+                activeCount++;
+            }
+            totalTps += a.tps;
+        }
+
         labelPaint.setColor(C_ACCENT);
         labelPaint.setTextSize(dp(15));
         labelPaint.setFakeBoldText(true);
         labelPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText("AGENT", dp(18), dp(28), labelPaint);
+        canvas.drawText("AGENTS", dp(18), dp(28), labelPaint);
         labelPaint.setFakeBoldText(false);
 
-        // status chip
-        int sc = stateColor();
-        String st = stateText();
-        labelPaint.setTextSize(dp(12));
+        labelPaint.setTextSize(dp(11));
+        labelPaint.setColor(C_LABEL);
+        String summary = agents.size() == 0
+                ? "no agents configured - add them on the config page"
+                : (onlineCount + " online \u00B7 " + activeCount + " active \u00B7 "
+                   + String.format("%.0f", totalTps) + " tok/s");
+        fit(labelPaint, summary, w - dp(320));
+        canvas.drawText(summary, dp(96), dp(28), labelPaint);
+
+        if (agents.isEmpty()) {
+            return;
+        }
+
+        int n = Math.min(agents.size(), 4);
+        int cols = n == 1 ? 1 : 2;
+        int rows = (n + cols - 1) / cols;
+        float top = dp(48);
+        float cw = (w - pad * 2 - gap * (cols - 1)) / cols;
+        float ch = (h - top - pad - gap * (rows - 1)) / rows;
+
+        for (int i = 0; i < n; i++) {
+            int col = i % cols;
+            int row = i / cols;
+            float l = pad + col * (cw + gap);
+            float t = top + row * (ch + gap);
+            drawAgent(canvas, agents.get(i), l, t, l + cw, t + ch);
+        }
+
+        if (agents.size() > 4) {
+            labelPaint.setColor(C_LABEL);
+            labelPaint.setTextSize(dp(10));
+            labelPaint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText("+" + (agents.size() - 4) + " more", w - pad, h - dp(2), labelPaint);
+        }
+    }
+
+    private void drawAgent(Canvas c, Agent a, float l, float t, float r, float b) {
+        drawCard(c, l, t, r, b);
+        float w = r - l;
+        float h = b - t;
+        float pad = dp(16);
+        boolean big = h > dp(420);
+
+        // name
+        labelPaint.setColor(C_TEXT);
+        labelPaint.setFakeBoldText(true);
+        labelPaint.setTextSize(Math.min(dp(16), h * 0.062f));
+        labelPaint.setTextAlign(Paint.Align.LEFT);
+        fit(labelPaint, a.name, w - dp(150));
+        c.drawText(a.name, l + pad, t + labelPaint.getTextSize() + dp(8), labelPaint);
+        labelPaint.setFakeBoldText(false);
+
+        // status chip (top right)
+        int sc = stateColor(a);
+        String st = stateText(a);
+        labelPaint.setTextSize(dp(11));
         float tw = labelPaint.measureText(st);
-        chip.set(dp(92), dp(12), dp(92) + tw + dp(22), dp(36));
+        chip.set(r - pad - tw - dp(22), t + dp(12), r - pad, t + dp(36));
         chipPaint.setColor((sc & 0x00FFFFFF) | 0x33000000);
-        canvas.drawRoundRect(chip, dp(12), dp(12), chipPaint);
+        c.drawRoundRect(chip, dp(12), dp(12), chipPaint);
         labelPaint.setColor(sc);
         labelPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(st, chip.left + dp(11), chip.top + dp(17), labelPaint);
+        c.drawText(st, chip.left + dp(11), chip.top + dp(17), labelPaint);
 
-        // model right aligned
-        labelPaint.setTextSize(dp(12));
-        labelPaint.setColor(C_LABEL);
-        labelPaint.setTextAlign(Paint.Align.RIGHT);
-        String m = model.length() > 46 ? model.substring(model.length() - 46) : model;
-        fit(labelPaint, m, w - dp(260));
-        canvas.drawText(m, w - dp(18), dp(28), labelPaint);
+        // model
+        subPaint.setColor(C_LABEL);
+        subPaint.setTextSize(dp(11));
+        String model = a.model;
+        if (model.length() > 42) {
+            model = model.substring(model.length() - 42);
+        }
+        fit(subPaint, model, w - pad * 2);
+        c.drawText(model, l + pad, t + dp(46), subPaint);
 
-        // main TPS card
-        float top = dp(50);
-        float mainH = (h - top - pad - gap) * 0.52f;
-        drawCard(canvas, pad, top, w - pad, top + mainH);
-
-        labelPaint.setColor(C_LABEL);
-        labelPaint.setTextSize(dp(11));
-        labelPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText("THROUGHPUT", pad + dp(20), top + dp(24), labelPaint);
-
-        valuePaint.setColor(online ? C_TEXT : C_GREY);
-        valuePaint.setTextSize(Math.min(mainH * 0.42f, w * 0.16f));
+        // big TPS
+        valuePaint.setColor(a.online ? C_TEXT : C_GREY);
+        float tpsSize = Math.min(h * 0.26f, w * 0.22f);
+        if (!big) {
+            tpsSize = Math.min(h * 0.30f, w * 0.20f);
+        }
+        valuePaint.setTextSize(tpsSize);
         valuePaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(String.format("%.1f", tps), pad + dp(20), top + mainH * 0.62f, valuePaint);
-        float tpsW = valuePaint.measureText(String.format("%.1f", tps));
+        String tpsStr = String.format("%.1f", a.tps);
+        c.drawText(tpsStr, l + pad, t + h * (big ? 0.40f : 0.44f), valuePaint);
+        float tpsW = valuePaint.measureText(tpsStr);
         subPaint.setColor(C_SUB);
-        subPaint.setTextSize(dp(18));
-        canvas.drawText("tok/s", pad + dp(28) + tpsW, top + mainH * 0.62f, subPaint);
+        subPaint.setTextSize(Math.max(dp(12), tpsSize * 0.22f));
+        c.drawText("tok/s", l + pad + tpsW + dp(8), t + h * (big ? 0.40f : 0.44f), subPaint);
 
-        subPaint.setTextSize(dp(12));
-        canvas.drawText("avg " + String.format("%.1f", tpsAvg) + " tok/s  ·  "
-                + (processing > 0 ? "1 request active" : "no active request"),
-                pad + dp(20), top + mainH * 0.80f, subPaint);
+        // average
+        subPaint.setTextSize(dp(11));
+        subPaint.setColor(C_SUB);
+        c.drawText("avg " + String.format("%.1f", a.tpsAvg) + " tok/s",
+                l + pad, t + h * (big ? 0.48f : 0.54f), subPaint);
 
-        // sparkline on the right half
-        drawSpark(canvas,
-                w * 0.48f, top + dp(30),
-                w - pad - dp(20), top + mainH - dp(18),
-                C_ACCENT);
+        // sparkline on the right for big cards
+        if (big) {
+            drawSpark(c, a, l + w * 0.52f, t + h * 0.18f, r - pad, t + h * 0.50f);
+        }
 
-        // bottom row
-        float by = top + mainH + gap;
-        float bh = h - by - pad;
-
-        // context card (50%)
-        float cw1 = (w - pad * 2 - gap * 2) * 0.50f;
-        drawCard(canvas, pad, by, pad + cw1, by + bh);
+        // context
+        float ctxY = t + h * (big ? 0.62f : 0.66f);
         labelPaint.setColor(C_LABEL);
-        labelPaint.setTextSize(dp(11));
+        labelPaint.setTextSize(dp(10));
         labelPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText("CONTEXT", pad + dp(18), by + dp(24), labelPaint);
+        c.drawText("CONTEXT", l + pad, ctxY, labelPaint);
+        subPaint.setColor(C_TEXT);
+        subPaint.setTextSize(dp(11));
+        subPaint.setTextAlign(Paint.Align.RIGHT);
+        c.drawText((a.ctxPct > 0 ? Math.round(a.ctxPct) + "% \u00B7 " : "")
+                        + kfmt(a.ctxUsed) + " / " + kfmt(a.ctxTotal),
+                r - pad, ctxY, subPaint);
 
-        valuePaint.setColor(C_TEXT);
-        valuePaint.setTextSize(Math.min(bh * 0.30f, cw1 * 0.20f));
-        canvas.drawText(ctxPct > 0 ? Math.round(ctxPct) + "%" : "--",
-                pad + dp(18), by + bh * 0.52f, valuePaint);
-
-        subPaint.setColor(C_SUB);
-        subPaint.setTextSize(dp(12));
-        canvas.drawText(kfmt(ctxUsed) + " / " + kfmt(ctxTotal),
-                pad + dp(18), by + bh * 0.68f, subPaint);
-
-        float barTop = by + bh - dp(22);
-        bar.set(pad + dp(18), barTop, pad + cw1 - dp(18), barTop + dp(10));
+        float barY = ctxY + dp(8);
+        bar.set(l + pad, barY, r - pad, barY + dp(8));
         barBg.setColor(C_TRACK);
-        canvas.drawRoundRect(bar, dp(5), dp(5), barBg);
-        int bc = ctxPct >= 85 ? C_RED : (ctxPct >= 60 ? C_AMBER : C_GREEN);
-        bar.set(pad + dp(18), barTop,
-                pad + dp(18) + (cw1 - dp(36)) * (float) Math.min(100, Math.max(0, ctxPct)) / 100f,
-                barTop + dp(10));
+        c.drawRoundRect(bar, dp(4), dp(4), barBg);
+        int bc = a.ctxPct >= 85 ? C_RED : (a.ctxPct >= 60 ? C_AMBER : C_GREEN);
+        bar.set(l + pad, barY, l + pad + (w - pad * 2) * (float) Math.min(100, Math.max(0, a.ctxPct)) / 100f,
+                barY + dp(8));
         barFg.setColor(bc);
-        canvas.drawRoundRect(bar, dp(5), dp(5), barFg);
+        c.drawRoundRect(bar, dp(4), dp(4), barFg);
 
-        // tokens card (25%)
-        float x2 = pad + cw1 + gap;
-        float cw2 = (w - pad * 2 - gap * 2) * 0.25f;
-        drawCard(canvas, x2, by, x2 + cw2, by + bh);
-        labelPaint.setColor(C_LABEL);
-        labelPaint.setTextSize(dp(11));
-        canvas.drawText("TOKENS", x2 + dp(16), by + dp(24), labelPaint);
+        // tokens
         subPaint.setColor(C_SUB);
-        subPaint.setTextSize(dp(11));
-        canvas.drawText("out " + kfmt(tokOut), x2 + dp(16), by + dp(50), subPaint);
-        canvas.drawText("in " + kfmt(tokIn), x2 + dp(16), by + dp(68), subPaint);
-        canvas.drawText("cached " + kfmt(tokCached), x2 + dp(16), by + dp(86), subPaint);
+        subPaint.setTextSize(dp(10));
+        subPaint.setTextAlign(Paint.Align.LEFT);
+        c.drawText("in " + kfmt(a.tokIn) + " \u00B7 out " + kfmt(a.tokOut)
+                + " \u00B7 cached " + kfmt(a.tokCached),
+                l + pad, t + h * (big ? 0.82f : 0.86f), subPaint);
 
-        // requests card (25%)
-        float x3 = x2 + cw2 + gap;
-        drawCard(canvas, x3, by, w - pad, by + bh);
-        labelPaint.setColor(C_LABEL);
-        labelPaint.setTextSize(dp(11));
-        canvas.drawText("REQUESTS", x3 + dp(16), by + dp(24), labelPaint);
-        subPaint.setColor(C_SUB);
-        subPaint.setTextSize(dp(11));
-        canvas.drawText("processing " + processing, x3 + dp(16), by + dp(50), subPaint);
-        canvas.drawText("busy slots " + busySlots + "/" + slots, x3 + dp(16), by + dp(68), subPaint);
-        canvas.drawText("queue " + deferred, x3 + dp(16), by + dp(86), subPaint);
-        canvas.drawText("compactions " + (compactions == null ? "--" : compactions),
-                x3 + dp(16), by + dp(104), subPaint);
+        // requests + compactions
+        c.drawText(a.processing + " req \u00B7 " + a.busySlots + "/" + a.slots
+                        + " slots \u00B7 q " + a.deferred
+                        + " \u00B7 comp " + (a.compactions == null ? "--" : a.compactions),
+                l + pad, t + h * (big ? 0.90f : 0.95f), subPaint);
 
-        if (!online && error.length() > 0) {
+        if (!a.online && a.error.length() > 0) {
             subPaint.setColor(C_RED);
-            subPaint.setTextSize(dp(11));
-            String e = error.length() > 80 ? error.substring(0, 80) : error;
-            canvas.drawText(e, pad + dp(20), by - dp(6), subPaint);
+            subPaint.setTextSize(dp(9));
+            String e = a.error.length() > 70 ? a.error.substring(0, 70) : a.error;
+            c.drawText(e, l + pad, b - dp(6), subPaint);
         }
     }
 }
