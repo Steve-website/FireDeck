@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FireDeck - Configuration</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#252a35; --text:#e6e9ef; --muted:#8b93a7; --accent:#4fc3f7; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(15,17,21,.96); backdrop-filter:blur(6px); z-index:10; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; font-weight:600; }
+  h1 span { color:var(--accent); }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tab { background:#1b1f29; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .tab.active { background:var(--accent); color:#06222e; border-color:var(--accent); font-weight:600; }
+  .tab.add { color:var(--muted); }
+  .spacer { flex:1; }
+  .meta { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:13px; }
+  .meta input { width:52px; }
+  button { background:#232936; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font-size:13px; }
+  button:hover { background:#2a3142; border-color:#3a4354; }
+  button.primary { background:var(--accent); color:#06222e; border-color:var(--accent); font-weight:600; }
+  button.danger { color:#ef9a9a; border-color:#4a2a2a; }
+  button.tiny { padding:4px 8px; font-size:11px; }
+  main { padding:20px; }
+  .pagesettings { display:flex; gap:14px; align-items:end; margin-bottom:16px; flex-wrap:wrap; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  .grid { display:grid; gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:9px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { min-width:0; }
+  .swatch { width:34px; height:34px; padding:0; border:1px solid var(--line); border-radius:8px; background:none; cursor:pointer; flex:0 0 auto; }
+  input, select, textarea { background:#0d1016; color:var(--text); border:1px solid var(--line); border-radius:7px; padding:7px 9px; font:inherit; width:100%; }
+  textarea { min-height:76px; resize:vertical; font-family:ui-monospace, Consolas, monospace; font-size:12px; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); }
+  .icon { width:46px; text-align:center; font-weight:700; flex:0 0 auto; }
+  .label { font-weight:600; }
+  .hint { color:var(--muted); font-size:11px; }
+  .imgrow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .preview { width:96px; height:72px; border-radius:8px; border:1px solid var(--line); background:#0d1016; object-fit:cover; flex:0 0 auto; }
+  .filewrap { position:relative; overflow:hidden; display:inline-block; }
+  .filewrap input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .holdbox { border-top:1px dashed var(--line); padding-top:8px; }
+  .holdhead { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:12px; }
+  .status { font-size:12px; color:var(--muted); }
+  .status.ok { color:#66bb6a; }
+  .status.err { color:#ef5350; }
+  .footer { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px; border-top:1px solid var(--line); position:sticky; bottom:0; background:rgba(15,17,21,.96); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fire<span>Deck</span></h1>
+  <div id="tabs" class="tabs"></div>
+  <button class="tab add" id="addpage">+ page</button>
+  <div class="spacer"></div>
+  <div id="status" class="status">loading...</div>
+  <button id="reload">Reload</button>
+</header>
+
+<main>
+  <div class="pagesettings">
+    <div class="field" style="flex:1;min-width:180px">
+      <label>Page name</label>
+      <input id="pagename" type="text">
+    </div>
+    <div class="field"><label>Columns</label><input id="cols" type="number" min="1" max="8"></div>
+    <div class="field"><label>Rows</label><input id="rows" type="number" min="1" max="8"></div>
+    <button id="delpage" class="danger">Delete page</button>
+  </div>
+  <div id="grid" class="grid"></div>
+</main>
+
+<div class="footer">
+  <span id="count" class="status"></span>
+  <button id="save" class="primary">Save all</button>
+</div>
+
+<script>
+var layout = { version: 2, pages: [] };
+var pi = 0;
+
+var TYPES = [
+  ["key",     "Single key: media_play_pause, media_volume_up, space, f5"],
+  ["hotkey",  "Combination: ctrl+shift+s, win+l, alt+tab"],
+  ["text",    "Type text: hello world"],
+  ["launch",  "Start program: notepad, C:\\path\\app.exe"],
+  ["url",     "Open URL: https://example.com"],
+  ["command", "Shell command: start cmd"],
+  ["macro",   "Multi-step macro - one step per line (see hint)"],
+  ["stats",   "Show live PC stats on the tablet - no value needed"]
+];
+
+var MACRO_HINT = "One step per line:  key media_volume_up / hotkey ctrl+s / text hello / launch notepad / url https://... / command start cmd / delay 500";
+
+function $(id) { return document.getElementById(id); }
+
+function hintFor(t) {
+  for (var i = 0; i < TYPES.length; i++) if (TYPES[i][0] === t) return TYPES[i][1];
+  return "";
+}
+
+function emptyButton() {
+  return { label: "", icon: "", color: "#37474F", image: "", type: "key", value: "" };
+}
+
+function page() { return layout.pages[pi]; }
+
+function ensureCount(p) {
+  var n = (p.cols || 4) * (p.rows || 3);
+  p.buttons = p.buttons || [];
+  while (p.buttons.length < n) p.buttons.push(emptyButton());
+  p.buttons.length = n;
+}
+
+function setStatus(text, cls) {
+  var s = $("status");
+  s.textContent = text;
+  s.className = "status " + (cls || "");
+}
+
+function renderTabs() {
+  var box = $("tabs");
+  box.innerHTML = "";
+  layout.pages.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.className = "tab" + (i === pi ? " active" : "");
+    b.textContent = p.name || ("Page " + (i + 1));
+    b.onclick = function () { pi = i; renderAll(); };
+    box.appendChild(b);
+  });
+  $("pagename").value = page().name || "";
+  $("cols").value = page().cols;
+  $("rows").value = page().rows;
+}
+
+function renderGrid() {
+  var p = page();
+  var grid = $("grid");
+  grid.style.gridTemplateColumns = "repeat(" + p.cols + ", minmax(0, 1fr))";
+  grid.innerHTML = "";
+
+  p.buttons.forEach(function (b, bi) {
+    var card = document.createElement("div");
+    card.className = "card";
+
+    // --- top row: colour / icon / label
+    var top = document.createElement("div");
+    top.className = "row";
+
+    var color = document.createElement("input");
+    color.type = "color";
+    color.className = "swatch";
+    color.value = b.color || "#37474F";
+    color.oninput = function () { b.color = color.value; };
+    top.appendChild(color);
+
+    var icon = document.createElement("input");
+    icon.className = "icon";
+    icon.maxLength = 3;
+    icon.value = b.icon || "";
+    icon.placeholder = "★";
+    icon.oninput = function () { b.icon = icon.value; };
+    top.appendChild(icon);
+
+    var label = document.createElement("input");
+    label.className = "label";
+    label.value = b.label || "";
+    label.placeholder = "Label";
+    label.oninput = function () { b.label = label.value; };
+    top.appendChild(label);
+    card.appendChild(top);
+
+    // --- image row
+    var imgrow = document.createElement("div");
+    imgrow.className = "imgrow";
+    if (b.image) {
+      var img = document.createElement("img");
+      img.className = "preview";
+      img.src = b.image;
+      imgrow.appendChild(img);
+    }
+
+    var fw = document.createElement("span");
+    fw.className = "filewrap";
+    var f = document.createElement("input");
+    f.type = "file";
+    f.accept = "image/*";
+    f.onchange = function () { if (f.files && f.files[0]) uploadIcon(pi, bi, f.files[0]); };
+    var up = document.createElement("button");
+    up.className = "tiny";
+    up.textContent = b.image ? "Replace PNG" : "Upload PNG";
+    fw.appendChild(up);
+    fw.appendChild(f);
+    imgrow.appendChild(fw);
+
+    if (b.image) {
+      var rm = document.createElement("button");
+      rm.className = "tiny danger";
+      rm.textContent = "Remove";
+      rm.onclick = function () { removeIcon(pi, bi); };
+      imgrow.appendChild(rm);
+    }
+    card.appendChild(imgrow);
+
+    var ihint = document.createElement("div");
+    ihint.className = "hint";
+    ihint.textContent = "PNG fills the whole button (center-cropped). Label is drawn on top.";
+    card.appendChild(ihint);
+
+    // --- action type / value
+    var type = document.createElement("select");
+    TYPES.forEach(function (t) {
+      var o = document.createElement("option");
+      o.value = t[0];
+      o.textContent = t[0];
+      if ((b.type || "key") === t[0]) o.selected = true;
+      type.appendChild(o);
+    });
+    card.appendChild(type);
+
+    var value;
+    if ((b.type || "key") === "macro") {
+      value = document.createElement("textarea");
+      value.value = typeof b.value === "string" ? b.value : "";
+      value.placeholder = MACRO_HINT;
+      value.oninput = function () { b.value = value.value; };
+    } else {
+      value = document.createElement("input");
+      value.value = typeof b.value === "string" ? b.value : "";
+      value.placeholder = "value";
+      value.oninput = function () { b.value = value.value; };
+    }
+
+    var hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = hintFor(b.type || "key");
+
+    type.onchange = function () {
+      b.type = type.value;
+      renderGrid();
+      setStatus("type changed - press Save all", "ok");
+    };
+    card.appendChild(type);
+    card.appendChild(value);
+    card.appendChild(hint);
+
+    // --- hold action
+    var holdbox = document.createElement("div");
+    holdbox.className = "holdbox";
+    var holdhead = document.createElement("label");
+    holdhead.className = "holdhead";
+    var hc = document.createElement("input");
+    hc.type = "checkbox";
+    hc.style.width = "auto";
+    hc.checked = !!b.hold;
+    hc.onchange = function () {
+      if (hc.checked) b.hold = { type: "key", value: "" };
+      else delete b.hold;
+      renderGrid();
+    };
+    holdhead.appendChild(hc);
+    holdhead.appendChild(document.createTextNode("Hold action (long-press)"));
+    holdbox.appendChild(holdhead);
+
+    if (b.hold) {
+      var ht = document.createElement("select");
+      TYPES.forEach(function (t) {
+        if (t[0] === "macro" || t[0] === "stats") return;
+        var o = document.createElement("option");
+        o.value = t[0];
+        o.textContent = t[0];
+        if ((b.hold.type || "key") === t[0]) o.selected = true;
+        ht.appendChild(o);
+      });
+      ht.onchange = function () { b.hold.type = ht.value; renderGrid(); };
+      holdbox.appendChild(ht);
+
+      var hv = document.createElement("input");
+      hv.value = b.hold.value || "";
+      hv.placeholder = "hold value";
+      hv.oninput = function () { b.hold.value = hv.value; };
+      holdbox.appendChild(hv);
+    }
+    card.appendChild(holdbox);
+
+    // --- test buttons
+    var row = document.createElement("div");
+    row.className = "row";
+    var test = document.createElement("button");
+    test.className = "tiny";
+    test.textContent = "Test";
+    test.onclick = function () { testAction(pi, bi, false); };
+    row.appendChild(test);
+
+    if (b.hold) {
+      var th = document.createElement("button");
+      th.className = "tiny";
+      th.textContent = "Test hold";
+      th.onclick = function () { testAction(pi, bi, true); };
+      row.appendChild(th);
+    }
+    card.appendChild(row);
+
+    grid.appendChild(card);
+  });
+
+  $("count").textContent = p.cols + " × " + p.rows + " = " + p.buttons.length + " buttons";
+}
+
+function renderAll() {
+  ensureCount(page());
+  renderTabs();
+  renderGrid();
+}
+
+function load() {
+  setStatus("loading...");
+  fetch("/layout").then(function (r) { return r.json(); }).then(function (d) {
+    layout = d;
+    layout.pages = layout.pages || [];
+    if (!layout.pages.length) layout.pages = [{ name: "Main", cols: 4, rows: 3, buttons: [] }];
+    layout.pages.forEach(ensureCount);
+    if (pi >= layout.pages.length) pi = 0;
+    renderAll();
+    setStatus("loaded", "ok");
+  }).catch(function (e) { setStatus("offline: " + e.message, "err"); });
+}
+
+function save() {
+  layout.pages.forEach(ensureCount);
+  setStatus("saving...");
+  fetch("/layout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(layout)
+  }).then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    setStatus("saved - tablet updates within 3s", "ok");
+  }).catch(function (e) { setStatus("save failed: " + e.message, "err"); });
+}
+
+function uploadIcon(pageIndex, buttonIndex, file) {
+  setStatus("uploading icon...");
+  var reader = new FileReader();
+  reader.onload = function () {
+    fetch("/icon?page=" + pageIndex + "&id=" + buttonIndex, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: reader.result
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (path) {
+      layout.pages[pageIndex].buttons[buttonIndex].image = path;
+      setStatus("icon saved", "ok");
+      renderGrid();
+    }).catch(function (e) { setStatus("upload failed: " + e.message, "err"); });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function removeIcon(pageIndex, buttonIndex) {
+  fetch("/icon?page=" + pageIndex + "&id=" + buttonIndex + "&remove=1", { method: "POST" })
+    .then(function () {
+      layout.pages[pageIndex].buttons[buttonIndex].image = "";
+      renderGrid();
+      setStatus("icon removed", "ok");
+    });
+}
+
+function testAction(pageIndex, buttonIndex, hold) {
+  var b = layout.pages[pageIndex].buttons[buttonIndex];
+  if (!hold && b.type === "stats") {
+    setStatus("stats button - tap it on the tablet to open the overlay", "ok");
+    return;
+  }
+  fetch("/press?page=" + pageIndex + "&id=" + buttonIndex + (hold ? "&hold=1" : ""))
+    .then(function () { setStatus("sent to PC", "ok"); })
+    .catch(function (e) { setStatus("test failed: " + e.message, "err"); });
+}
+
+$("save").onclick = save;
+$("reload").onclick = load;
+$("addpage").onclick = function () {
+  layout.pages.push({ name: "Page " + (layout.pages.length + 1), cols: 4, rows: 3, buttons: [] });
+  pi = layout.pages.length - 1;
+  renderAll();
+};
+$("delpage").onclick = function () {
+  if (layout.pages.length <= 1) { setStatus("keep at least one page", "err"); return; }
+  if (!confirm("Delete page '" + page().name + "'?")) return;
+  layout.pages.splice(pi, 1);
+  pi = Math.max(0, Math.min(pi, layout.pages.length - 1));
+  renderAll();
+};
+$("pagename").oninput = function () { page().name = this.value; renderTabs(); };
+$("cols").onchange = function () { page().cols = parseInt(this.value, 10) || 4; renderAll(); };
+$("rows").onchange = function () { page().rows = parseInt(this.value, 10) || 3; renderAll(); };
+
+load();
+</script>
+</body>
+</html>

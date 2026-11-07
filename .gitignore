@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local user data / generated files
+server/layout.json
+server/layout.v1.backup.json
+server/icons/
+
+# Bundled third-party tools (LibreHardwareMonitor etc.)
+tools/
+
+# Build output
+build/
+*.apk
+*.idsig
+*.keystore
+*.jks
+
+# OS junk
+Thumbs.db
+.DS_Store

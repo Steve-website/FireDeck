@@ -1,0 +1,318 @@
+{
+  "version": 2,
+  "pages": [
+    {
+      "name": "Media",
+      "cols": 4,
+      "rows": 3,
+      "buttons": [
+        {
+          "label": "Mute",
+          "icon": "X",
+          "color": "#455A64",
+          "image": "",
+          "type": "key",
+          "value": "media_volume_mute"
+        },
+        {
+          "label": "Vol -",
+          "icon": "-",
+          "color": "#455A64",
+          "image": "",
+          "type": "key",
+          "value": "media_volume_down"
+        },
+        {
+          "label": "Vol +",
+          "icon": "+",
+          "color": "#455A64",
+          "image": "",
+          "type": "key",
+          "value": "media_volume_up"
+        },
+        {
+          "label": "Play/Pause",
+          "icon": ">",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": "media_play_pause"
+        },
+        {
+          "label": "Previous",
+          "icon": "|<",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": "media_previous"
+        },
+        {
+          "label": "Next",
+          "icon": ">|",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": "media_next"
+        },
+        {
+          "label": "YouTube",
+          "icon": "YT",
+          "color": "#B71C1C",
+          "image": "",
+          "type": "url",
+          "value": "https://youtube.com"
+        },
+        {
+          "label": "Spotify",
+          "icon": "SP",
+          "color": "#1B5E20",
+          "image": "",
+          "type": "url",
+          "value": "https://open.spotify.com"
+        },
+        {
+          "label": "Twitch",
+          "icon": "TW",
+          "color": "#4A148C",
+          "image": "",
+          "type": "url",
+          "value": "https://twitch.tv"
+        },
+        {
+          "label": "Browser",
+          "icon": "W",
+          "color": "#0D47A1",
+          "image": "",
+          "type": "url",
+          "value": "https://google.com"
+        },
+        {
+          "label": "Fullscreen",
+          "icon": "FS",
+          "color": "#263238",
+          "image": "",
+          "type": "key",
+          "value": "f11"
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "cols": 4,
+      "rows": 3,
+      "buttons": [
+        {
+          "label": "Lock PC",
+          "icon": "L",
+          "color": "#B71C1C",
+          "image": "",
+          "type": "hotkey",
+          "value": "win+l"
+        },
+        {
+          "label": "Task View",
+          "icon": "[]",
+          "color": "#1A237E",
+          "image": "",
+          "type": "hotkey",
+          "value": "win+tab"
+        },
+        {
+          "label": "Screenshot",
+          "icon": "S",
+          "color": "#1B5E20",
+          "image": "",
+          "type": "hotkey",
+          "value": "win+shift+s",
+          "hold": {
+            "type": "launch",
+            "value": "snippingtool"
+          }
+        },
+        {
+          "label": "Notepad",
+          "icon": "N",
+          "color": "#4E342E",
+          "image": "",
+          "type": "launch",
+          "value": "notepad"
+        },
+        {
+          "label": "Terminal",
+          "icon": "$",
+          "color": "#212121",
+          "image": "",
+          "type": "command",
+          "value": "start cmd"
+        },
+        {
+          "label": "Explorer",
+          "icon": "E",
+          "color": "#0D47A1",
+          "image": "",
+          "type": "command",
+          "value": "explorer"
+        },
+        {
+          "label": "Settings",
+          "icon": "G",
+          "color": "#37474F",
+          "image": "",
+          "type": "command",
+          "value": "start ms-settings:"
+        },
+        {
+          "label": "Copy",
+          "icon": "C",
+          "color": "#263238",
+          "image": "",
+          "type": "hotkey",
+          "value": "ctrl+c"
+        },
+        {
+          "label": "Paste",
+          "icon": "V",
+          "color": "#263238",
+          "image": "",
+          "type": "hotkey",
+          "value": "ctrl+v"
+        },
+        {
+          "label": "Undo",
+          "icon": "U",
+          "color": "#263238",
+          "image": "",
+          "type": "hotkey",
+          "value": "ctrl+z"
+        },
+        {
+          "label": "Volume Mixer",
+          "icon": "VM",
+          "color": "#455A64",
+          "image": "",
+          "type": "command",
+          "value": "start ms-settings:apps-volume"
+        },
+        {
+          "label": "PC Stats",
+          "icon": "%",
+          "color": "#00695C",
+          "image": "",
+          "type": "stats",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "name": "Macros",
+      "cols": 4,
+      "rows": 3,
+      "buttons": [
+        {
+          "label": "Volume Pulse",
+          "icon": "~",
+          "color": "#455A64",
+          "image": "",
+          "type": "macro",
+          "value": "key media_volume_up\ndelay 150\nkey media_volume_down"
+        },
+        {
+          "label": "Open Notepad",
+          "icon": "N",
+          "color": "#4E342E",
+          "image": "",
+          "type": "macro",
+          "value": "launch notepad\ndelay 900\ntext Hello from FireDeck"
+        },
+        {
+          "label": "Browser + Search",
+          "icon": "W",
+          "color": "#0D47A1",
+          "image": "",
+          "type": "macro",
+          "value": "launch https://google.com\ndelay 800"
+        },
+        {
+          "label": "Mute + Lock",
+          "icon": "ML",
+          "color": "#B71C1C",
+          "image": "",
+          "type": "macro",
+          "value": "key media_volume_mute\ndelay 150\nhotkey win+l"
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "Blank",
+          "icon": "",
+          "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}
