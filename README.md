@@ -150,6 +150,8 @@ OpenAI-compatible **llama.cpp / Unsloth Studio** servers — one card each:
 - live **tokens/sec** with a rolling sparkline and session average
 - **context usage** (used / window, per slot)
 - prompt / generated / cached token totals
+- **hardware**: GPU name, temperature, VRAM, utilisation and power, plus
+  CPU / RAM / disk usage from Unsloth Studio's `/api/system`
 - requests processing, busy slots, queue
 - compaction count (Phase 2: agent-side hooks)
 
@@ -173,7 +175,10 @@ masked values are shown back in the browser. Endpoints can also be set with
 }
 ```
 
-It polls `/metrics`, `/slots` and `/props` once per second per endpoint.
+It polls `/metrics`, `/slots` and `/props` once per second per endpoint, and
+`/api/system` every 2 s for GPU temperature, VRAM, utilisation, power, CPU,
+RAM and disk (Unsloth Studio). On multi-GPU hosts the card shows the busiest
+GPU and a `+N GPU` count.
 
 ## Layout file
 

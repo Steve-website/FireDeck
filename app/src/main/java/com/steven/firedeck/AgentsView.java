@@ -40,6 +40,10 @@ public class AgentsView extends View {
         double tokOut, tokIn, tokCached;
         int processing, deferred, busySlots, slots;
         Integer compactions = null;
+        double cpuPct = -1, ramPct = -1, ramUsed, ramTotal, diskPct = -1, diskFree;
+        int gpuCount = 0;
+        String gpuName = "";
+        double gpuTemp = -1, gpuUtil = -1, vramUsed = -1, vramTotal = -1, gpuPower = -1;
         double[] hist = new double[60];
         int histIdx = 0;
         int histCount = 0;
@@ -116,6 +120,25 @@ public class AgentsView extends View {
                         a.tokCached = tok.optDouble("cached", 0);
                     }
                     a.compactions = o.isNull("compactions") ? null : o.optInt("compactions", 0);
+                    JSONObject sys = o.optJSONObject("sys");
+                    if (sys != null) {
+                        a.cpuPct = sys.optDouble("cpu_pct", -1);
+                        a.ramPct = sys.optDouble("ram_pct", -1);
+                        a.ramUsed = sys.optDouble("ram_used", 0);
+                        a.ramTotal = sys.optDouble("ram_total", 0);
+                        a.diskPct = sys.optDouble("disk_pct", -1);
+                        a.diskFree = sys.optDouble("disk_free", 0);
+                        a.gpuCount = sys.optInt("gpu_count", 0);
+                        JSONObject g = sys.optJSONObject("gpu");
+                        if (g != null) {
+                            a.gpuName = g.optString("name", "");
+                            a.gpuTemp = g.isNull("temp") ? -1 : g.optDouble("temp", -1);
+                            a.gpuUtil = g.isNull("util") ? -1 : g.optDouble("util", -1);
+                            a.vramUsed = g.isNull("vram_used") ? -1 : g.optDouble("vram_used", -1);
+                            a.vramTotal = g.isNull("vram_total") ? -1 : g.optDouble("vram_total", -1);
+                            a.gpuPower = g.isNull("power") ? -1 : g.optDouble("power", -1);
+                        }
+                    }
                     double[] hdata = histData.get(a.name);
                     int[] hmeta = histMeta.get(a.name);
                     if (hdata == null) {
@@ -197,8 +220,7 @@ public class AgentsView extends View {
         }
     }
 
-    private void drawSpark(Canvas c, Agent a, float l, float t, float r, float b) {
-        if (a.histCount < 2) {
+    private void drawSpark(Canvas c, Agent a, float l, float t, float r, float b) {        if (a.histCount < 2) {
             return;
         }
         double max = 1.0;
@@ -219,6 +241,14 @@ public class AgentsView extends View {
         sparkPaint.setColor(C_ACCENT);
         sparkPaint.setAlpha(220);
         c.drawPath(spark, sparkPaint);
+    }
+
+    private String shortGpu(String n) {
+        if (n == null) {
+            return "";
+        }
+        String s = n.replace("NVIDIA GeForce ", "").replace("AMD ", "");
+        return s.length() > 26 ? s.substring(0, 26) : s;
     }
 
     @Override
@@ -334,25 +364,25 @@ public class AgentsView extends View {
         valuePaint.setTextSize(tpsSize);
         valuePaint.setTextAlign(Paint.Align.LEFT);
         String tpsStr = String.format("%.1f", a.tps);
-        c.drawText(tpsStr, l + pad, t + h * (big ? 0.40f : 0.44f), valuePaint);
+        c.drawText(tpsStr, l + pad, t + h * (big ? 0.34f : 0.38f), valuePaint);
         float tpsW = valuePaint.measureText(tpsStr);
         subPaint.setColor(C_SUB);
         subPaint.setTextSize(Math.max(dp(12), tpsSize * 0.22f));
-        c.drawText("tok/s", l + pad + tpsW + dp(8), t + h * (big ? 0.40f : 0.44f), subPaint);
+        c.drawText("tok/s", l + pad + tpsW + dp(8), t + h * (big ? 0.34f : 0.38f), subPaint);
 
         // average
         subPaint.setTextSize(dp(11));
         subPaint.setColor(C_SUB);
         c.drawText("avg " + String.format("%.1f", a.tpsAvg) + " tok/s",
-                l + pad, t + h * (big ? 0.48f : 0.54f), subPaint);
+                l + pad, t + h * (big ? 0.42f : 0.47f), subPaint);
 
         // sparkline on the right for big cards
         if (big) {
-            drawSpark(c, a, l + w * 0.52f, t + h * 0.18f, r - pad, t + h * 0.50f);
+            drawSpark(c, a, l + w * 0.52f, t + h * 0.15f, r - pad, t + h * 0.44f);
         }
 
         // context
-        float ctxY = t + h * (big ? 0.62f : 0.66f);
+        float ctxY = t + h * (big ? 0.52f : 0.55f);
         labelPaint.setColor(C_LABEL);
         labelPaint.setTextSize(dp(10));
         labelPaint.setTextAlign(Paint.Align.LEFT);
@@ -380,13 +410,63 @@ public class AgentsView extends View {
         subPaint.setTextAlign(Paint.Align.LEFT);
         c.drawText("in " + kfmt(a.tokIn) + " \u00B7 out " + kfmt(a.tokOut)
                 + " \u00B7 cached " + kfmt(a.tokCached),
-                l + pad, t + h * (big ? 0.82f : 0.86f), subPaint);
+                l + pad, t + h * (big ? 0.68f : 0.72f), subPaint);
+
+        // hardware: GPU temp / VRAM / utilization
+        if (a.gpuCount > 0) {
+            String gpuLine = "GPU " + shortGpu(a.gpuName);
+            if (a.gpuTemp >= 0) {
+                gpuLine += " \u00B7 " + Math.round(a.gpuTemp) + "\u00B0C";
+            }
+            if (a.vramUsed >= 0 && a.vramTotal > 0) {
+                gpuLine += " \u00B7 " + String.format("%.1f", a.vramUsed)
+                        + "/" + String.format("%.0f", a.vramTotal) + " GB";
+            }
+            if (a.gpuUtil >= 0) {
+                gpuLine += " \u00B7 " + Math.round(a.gpuUtil) + "%";
+            }
+            if (a.gpuPower >= 0) {
+                gpuLine += " \u00B7 " + Math.round(a.gpuPower) + "W";
+            }
+            if (a.gpuCount > 1) {
+                gpuLine += " \u00B7 +" + (a.gpuCount - 1) + " GPU";
+            }
+            int gc = a.gpuTemp >= 85 ? C_RED : (a.gpuTemp >= 70 ? C_AMBER : C_SUB);
+            subPaint.setColor(gc);
+            subPaint.setTextSize(dp(10));
+            fit(subPaint, gpuLine, w - pad * 2);
+            c.drawText(gpuLine, l + pad, t + h * (big ? 0.77f : 0.81f), subPaint);
+        }
+
+        // hardware: CPU / RAM / DISK
+        if (a.cpuPct >= 0 || a.ramPct >= 0) {
+            String sysLine = "CPU " + Math.round(a.cpuPct) + "%";
+            if (a.ramTotal > 0) {
+                sysLine += " \u00B7 RAM " + Math.round(a.ramPct) + "%";
+                if (big) {
+                    sysLine += " (" + String.format("%.1f", a.ramUsed) + "/"
+                            + String.format("%.1f", a.ramTotal) + " GB)";
+                }
+            }
+            if (a.diskPct >= 0) {
+                sysLine += " \u00B7 DISK " + Math.round(a.diskPct) + "%";
+                if (big && a.diskFree > 0) {
+                    sysLine += " (" + Math.round(a.diskFree) + " GB free)";
+                }
+            }
+            subPaint.setColor(C_SUB);
+            subPaint.setTextSize(dp(10));
+            fit(subPaint, sysLine, w - pad * 2);
+            c.drawText(sysLine, l + pad, t + h * (big ? 0.84f : 0.88f), subPaint);
+        }
 
         // requests + compactions
+        subPaint.setColor(C_SUB);
+        subPaint.setTextSize(dp(10));
         c.drawText(a.processing + " req \u00B7 " + a.busySlots + "/" + a.slots
                         + " slots \u00B7 q " + a.deferred
                         + " \u00B7 comp " + (a.compactions == null ? "--" : a.compactions),
-                l + pad, t + h * (big ? 0.90f : 0.95f), subPaint);
+                l + pad, t + h * (big ? 0.93f : 0.95f), subPaint);
 
         if (!a.online && a.error.length() > 0) {
             subPaint.setColor(C_RED);

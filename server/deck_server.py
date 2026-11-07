@@ -525,6 +525,54 @@ def _parse_metrics(text):
     return out
 
 
+def _num(v):
+    try:
+        if v is None:
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
+def _sys_summary(sysd):
+    """Compact hardware summary from Unsloth Studio's /api/system."""
+    if not isinstance(sysd, dict):
+        return None
+    cpu = sysd.get("cpu") or {}
+    mem = sysd.get("memory") or {}
+    disk = sysd.get("disk") or {}
+    gpu = sysd.get("gpu") or {}
+    devices = gpu.get("devices") or []
+
+    total = _num(mem.get("total_gb")) or 0
+    avail = _num(mem.get("available_gb")) or 0
+    summary = {
+        "cpu_pct": _num(cpu.get("usage_percent")),
+        "ram_pct": _num(mem.get("percent_used")),
+        "ram_used": round(max(0.0, total - avail), 1),
+        "ram_total": total,
+        "disk_pct": _num(disk.get("percent_used")),
+        "disk_free": _num(disk.get("free_gb")),
+        "uptime": _num(sysd.get("uptime_seconds")),
+        "gpu_count": len(devices),
+        "gpu": None,
+    }
+    if devices:
+        def score(d):
+            return (_num(d.get("vram_used_gb")) or 0,
+                    _num(d.get("memory_total_gb")) or 0)
+        primary = max(devices, key=score)
+        summary["gpu"] = {
+            "name": str(primary.get("name") or ""),
+            "temp": _num(primary.get("temperature_c")),
+            "util": _num(primary.get("gpu_utilization_pct")),
+            "vram_used": _num(primary.get("vram_used_gb")),
+            "vram_total": _num(primary.get("memory_total_gb")),
+            "power": _num(primary.get("power_draw_w")),
+        }
+    return summary
+
+
 def agent_worker(conf, stop_event):
     """Polls one llama.cpp / Unsloth Studio server for live agent telemetry."""
     aid = conf["id"]
@@ -538,6 +586,8 @@ def agent_worker(conf, stop_event):
     last_ctx = 0
     model = ""
     props_tick = 0.0
+    sys_cache = None
+    sys_tick = 0.0
 
     while not stop_event.is_set():
         now = time.time()
@@ -552,6 +602,14 @@ def agent_worker(conf, stop_event):
                 except Exception:
                     pass
                 props_tick = now
+
+            if now - sys_tick > 2.0:
+                try:
+                    sys_cache = _sys_summary(
+                        json.loads(_http_text(base + "/api/system", key, timeout=5)))
+                except Exception:
+                    pass
+                sys_tick = now
 
             dt = max(0.2, now - prev_t)
 
@@ -645,6 +703,7 @@ def agent_worker(conf, stop_event):
                     "accepted": met.get("llamacpp:spec_decode_num_accepted_tokens_total", 0),
                 },
                 "compactions": None,
+                "sys": sys_cache,
             }
             prev = met
             prev_t = now
