@@ -19,6 +19,8 @@ Stream Deck style controller with a real touchscreen.
 
 <img src="docs/config.png" width="840" alt="Browser configuration page">
 
+<img src="docs/agents.png" width="840" alt="Agent telemetry page">
+
 <img src="docs/setup.jpg" width="840" alt="FireDeck running on a Kindle Fire HD 7">
 
 *Real setup: FireDeck running on a Kindle Fire HD 7 (3rd gen) next to the PC.*
@@ -30,6 +32,7 @@ Stream Deck style controller with a real touchscreen.
 - **Long-press (hold) actions** — a second action per button
 - **Macros** — multi-step sequences with delays
 - **Live PC stats overlay** — CPU, GPU, RAM, temps, network, disk
+- **Agent telemetry page** — model, TPS, context usage, tokens, requests
 - Action types: `key`, `hotkey`, `text`, `launch`, `url`, `command`, `macro`, `stats`
 - Config page: <http://localhost:9100>
 
@@ -136,6 +139,28 @@ memory. Afterburner is installed but RTSS is not. Once RTSS is running, an FPS
 tile can read the live frame rate.
 
 Raw data: <http://localhost:9100/stats>
+
+## Agent stats page
+
+A page with `"kind": "agents"` shows live telemetry from an OpenAI-compatible
+**llama.cpp / Unsloth Studio** server:
+
+- state: `idle`, `prompt`, `working` or `streaming`
+- the currently loaded model
+- live **tokens/sec** with a rolling sparkline and session average
+- **context usage** (used / window, per slot)
+- prompt / generated / cached token totals
+- requests processing, busy slots, queue
+- compaction count (Phase 2: agent-side hooks)
+
+Configure it in `server/agent.json` (git-ignored) or with environment
+variables `FIRE_DECK_AGENT_BASE` / `FIRE_DECK_AGENT_KEY`:
+
+```json
+{ "base": "http://your-server:8888", "key": "sk-..." }
+```
+
+It polls `/metrics`, `/slots` and `/props` once per second.
 
 ## Layout file
 

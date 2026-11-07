@@ -43,12 +43,15 @@ public class MainActivity extends Activity {
 
     private static class Page {
         String name = "Page";
+        String kind = "deck";
         int cols = 4;
         int rows = 3;
         JSONArray buttons;
     }
 
     private DeckView deck;
+    private AgentsView agentsView;
+    private volatile boolean agentsActive = false;
     private TextView status;
     private LinearLayout pageBar;
     private HorizontalScrollView pageScroll;
@@ -94,6 +97,11 @@ public class MainActivity extends Activity {
 
         deck = new DeckView(this);
         content.addView(deck, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        agentsView = new AgentsView(this);
+        agentsView.setVisibility(View.GONE);
+        content.addView(agentsView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         status = new TextView(this);
@@ -152,6 +160,7 @@ public class MainActivity extends Activity {
 
         startPolling();
         startStatsPolling();
+        startAgentsPolling();
     }
 
     private void buildStatsOverlay(FrameLayout root) {
@@ -274,6 +283,7 @@ public class MainActivity extends Activity {
                     JSONObject o = arr.getJSONObject(i);
                     Page p = new Page();
                     p.name = o.optString("name", "Page");
+                    p.kind = o.optString("kind", "deck");
                     p.cols = o.optInt("cols", 4);
                     p.rows = o.optInt("rows", 3);
                     p.buttons = o.optJSONArray("buttons");
@@ -303,11 +313,47 @@ public class MainActivity extends Activity {
 
     private void applyPage() {
         if (pages.isEmpty()) {
+            agentsActive = false;
+            agentsView.setVisibility(View.GONE);
+            deck.setVisibility(View.VISIBLE);
             deck.setLayout(4, 3, null);
             return;
         }
         Page p = pages.get(pageIndex);
-        deck.setLayout(p.cols, p.rows, p.buttons);
+        boolean agents = "agents".equals(p.kind);
+        agentsActive = agents;
+        if (agents) {
+            deck.setVisibility(View.GONE);
+            agentsView.setVisibility(View.VISIBLE);
+        } else {
+            agentsView.setVisibility(View.GONE);
+            deck.setVisibility(View.VISIBLE);
+            deck.setLayout(p.cols, p.rows, p.buttons);
+        }
+    }
+
+    private void startAgentsPolling() {
+        new Thread(new Runnable() {
+            public void run() {
+                while (running) {
+                    if (agentsActive) {
+                        try {
+                            String json = httpGet(base + "/agents");
+                            final JSONObject o = new JSONObject(json);
+                            ui.post(new Runnable() {
+                                public void run() {
+                                    agentsView.setAgent(o);
+                                }
+                            });
+                        } catch (Exception ignored) {
+                        }
+                        sleep(1000);
+                    } else {
+                        sleep(500);
+                    }
+                }
+            }
+        }).start();
     }
 
     private void rebuildPageBar() {

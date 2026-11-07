@@ -3,6 +3,7 @@
   "pages": [
     {
       "name": "Media",
+      "kind": "deck",
       "cols": 4,
       "rows": 3,
       "buttons": [
@@ -106,6 +107,7 @@
     },
     {
       "name": "System",
+      "kind": "deck",
       "cols": 4,
       "rows": 3,
       "buttons": [
@@ -213,6 +215,7 @@
     },
     {
       "name": "Macros",
+      "kind": "deck",
       "cols": 4,
       "rows": 3,
       "buttons": [
@@ -308,6 +311,110 @@
           "label": "Blank",
           "icon": "",
           "color": "#212121",
+          "image": "",
+          "type": "key",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "name": "Agents",
+      "kind": "agents",
+      "cols": 4,
+      "rows": 3,
+      "buttons": [
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
+          "image": "",
+          "type": "key",
+          "value": ""
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "#37474F",
           "image": "",
           "type": "key",
           "value": ""

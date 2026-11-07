@@ -256,6 +256,10 @@ DEFAULT_LAYOUT = {
                 btn("Blank", "", "#212121", "key", ""),
             ],
         },
+        {
+            "name": "Agents", "kind": "agents", "cols": 4, "rows": 3,
+            "buttons": [],
+        },
     ],
 }
 
@@ -306,6 +310,7 @@ def normalize_layout(data):
         items = items[:cols * rows]
         pages.append({
             "name": str(p.get("name", "Page")),
+            "kind": ("agents" if str(p.get("kind", "deck")).lower() == "agents" else "deck"),
             "cols": cols,
             "rows": rows,
             "buttons": items,
@@ -404,6 +409,179 @@ def do_action(btn_def):
         run_step(step)
 
 
+AGENT_CONF = os.path.join(BASE, "agent.json")
+agent_lock = threading.Lock()
+AGENT = {"online": False}
+
+
+def _agent_settings():
+    base = os.environ.get("FIRE_DECK_AGENT_BASE", "").rstrip("/")
+    key = os.environ.get("FIRE_DECK_AGENT_KEY", "")
+    if (not base or not key) and os.path.exists(AGENT_CONF):
+        try:
+            with open(AGENT_CONF, "r", encoding="utf-8") as f:
+                conf = json.load(f)
+            base = base or str(conf.get("base", "")).rstrip("/")
+            key = key or str(conf.get("key", ""))
+        except Exception:
+            pass
+    return base, key
+
+
+def _http_text(url, key, timeout=2.5):
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + key})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _parse_metrics(text):
+    out = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            name, val = line.rsplit(" ", 1)
+            if "{" in name:
+                name = name.split("{", 1)[0]
+            out[name] = float(val)
+        except Exception:
+            pass
+    return out
+
+
+def agent_loop():
+    """Polls a llama.cpp / Unsloth Studio server for live agent telemetry."""
+    global AGENT
+    base, key = _agent_settings()
+    if not base or not key:
+        with agent_lock:
+            AGENT = {"online": False,
+                     "error": "agent endpoint not configured (server/agent.json)"}
+        return
+
+    prev = {}
+    prev_dec = {}
+    prev_t = time.time()
+    last_ctx = 0
+    model = ""
+    props_tick = 0.0
+
+    while True:
+        now = time.time()
+        try:
+            met = _parse_metrics(_http_text(base + "/metrics", key))
+            slots = json.loads(_http_text(base + "/slots", key))
+
+            if now - props_tick > 5.0:
+                try:
+                    props = json.loads(_http_text(base + "/props", key))
+                    model = str(props.get("model_path", model))
+                except Exception:
+                    pass
+                props_tick = now
+
+            dt = max(0.2, now - prev_t)
+
+            def delta(name):
+                cur = met.get(name)
+                old = prev.get(name)
+                return max(0.0, cur - old) if (cur is not None and old is not None) else 0.0
+
+            d_pred = delta("llamacpp:tokens_predicted_total")
+            d_prompt = delta("llamacpp:prompt_tokens_total")
+            processing = int(met.get("llamacpp:requests_processing", 0) or 0)
+            deferred = int(met.get("llamacpp:requests_deferred", 0) or 0)
+
+            used = 0
+            ctx = 0
+            busy = 0
+            live_dec = 0
+            for s in (slots or []):
+                sid = s.get("id", 0)
+                try:
+                    c = int(s.get("n_ctx") or 0)
+                    if c > ctx:
+                        ctx = c
+                except Exception:
+                    pass
+                if not s.get("is_processing"):
+                    prev_dec.pop(sid, None)
+                    continue
+                busy += 1
+                try:
+                    nt = s.get("next_token") or {}
+                    if isinstance(nt, list):
+                        nt = nt[0] if nt else {}
+                    if not isinstance(nt, dict):
+                        nt = {}
+                    nd = int(nt.get("n_decoded") or 0)
+                    old = prev_dec.get(sid)
+                    if old is not None and nd >= old:
+                        live_dec += nd - old
+                    prev_dec[sid] = nd
+                    # in this build n_prompt_tokens tracks the full context length
+                    pt = int(s.get("n_prompt_tokens") or 0)
+                    if pt > used:
+                        used = pt
+                except Exception:
+                    pass
+
+            if used > 0:
+                last_ctx = used
+            shown_ctx = used if used > 0 else last_ctx
+
+            tps = (live_dec / dt) if live_dec > 0 else (d_pred / dt)
+
+            if processing > 0:
+                state = "streaming" if live_dec > 0 else ("prompt" if d_prompt > 0 else "working")
+            else:
+                state = "idle"
+
+            gen_total = met.get("llamacpp:tokens_predicted_total", 0)
+            gen_secs = met.get("llamacpp:tokens_predicted_seconds_total", 0)
+            avg = (gen_total / gen_secs) if gen_secs else 0
+            gauge = met.get("llamacpp:predicted_tokens_seconds", 0) or 0
+
+            data = {
+                "online": True,
+                "ts": now,
+                "state": state,
+                "model": model,
+                "tps": tps,
+                "tps_avg": gauge if gauge else avg,
+                "requests": {
+                    "processing": processing,
+                    "deferred": deferred,
+                    "busy_slots": busy,
+                    "slots": len(slots or []),
+                },
+                "context": {
+                    "used": shown_ctx,
+                    "total": ctx,
+                    "pct": (100.0 * shown_ctx / ctx) if ctx else 0,
+                },
+                "tokens": {
+                    "generated": gen_total,
+                    "prompt": met.get("llamacpp:prompt_tokens_total", 0),
+                    "cached": met.get("llamacpp:prompt_tokens_cached_total", 0),
+                },
+                "spec": {
+                    "draft": met.get("llamacpp:spec_decode_num_draft_tokens_total", 0),
+                    "accepted": met.get("llamacpp:spec_decode_num_accepted_tokens_total", 0),
+                },
+                "compactions": None,
+            }
+            prev = met
+            prev_t = now
+            with agent_lock:
+                AGENT = data
+        except Exception as e:
+            with agent_lock:
+                AGENT = {"online": False, "error": str(e)}
+        time.sleep(1.0)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="text/plain; charset=utf-8", extra=None):
         if isinstance(body, str):
@@ -432,6 +610,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/stats":
             with stats_lock:
                 self._send(200, json.dumps(STATS), "application/json")
+        elif path == "/agents":
+            with agent_lock:
+                self._send(200, json.dumps(AGENT), "application/json")
         elif path == "/press":
             qs = parse_qs(parsed.query)
             try:
@@ -559,7 +740,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "not found")
 
     def log_message(self, fmt, *args):
-        if getattr(self, "path", "").startswith("/layout"):
+        p = getattr(self, "path", "")
+        if p.startswith("/layout") or p.startswith("/agents") or p.startswith("/stats"):
             return
         print("%s - %s" % (self.address_string(), fmt % args))
 
@@ -570,6 +752,7 @@ def main():
     args = ap.parse_args()
     load_layout()
     threading.Thread(target=stats_loop, daemon=True).start()
+    threading.Thread(target=agent_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     print("FireDeck server on http://0.0.0.0:%d" % args.port)
     print("Open http://localhost:%d to configure" % args.port)

@@ -68,6 +68,12 @@
     </div>
     <div class="field"><label>Columns</label><input id="cols" type="number" min="1" max="8"></div>
     <div class="field"><label>Rows</label><input id="rows" type="number" min="1" max="8"></div>
+    <div class="field"><label>Page type</label>
+      <select id="ptype">
+        <option value="deck">Deck</option>
+        <option value="agents">Agent stats</option>
+      </select>
+    </div>
     <button id="delpage" class="danger">Delete page</button>
   </div>
   <div id="grid" class="grid"></div>
@@ -130,10 +136,10 @@ function renderTabs() {
     b.textContent = p.name || ("Page " + (i + 1));
     b.onclick = function () { pi = i; renderAll(); };
     box.appendChild(b);
-  });
-  $("pagename").value = page().name || "";
+  });  $("pagename").value = page().name || "";
   $("cols").value = page().cols;
   $("rows").value = page().rows;
+  $("ptype").value = page().kind || "deck";
 }
 
 function renderGrid() {
@@ -141,6 +147,17 @@ function renderGrid() {
   var grid = $("grid");
   grid.style.gridTemplateColumns = "repeat(" + p.cols + ", minmax(0, 1fr))";
   grid.innerHTML = "";
+
+  if ((p.kind || "deck") === "agents") {
+    var note = document.createElement("div");
+    note.className = "card";
+    note.innerHTML = "<b>Agent stats page</b><div class='hint'>This page shows live telemetry from the " +
+      "configured LLM server (server/agent.json): state, model, TPS, context usage, tokens and " +
+      "requests. No buttons needed.</div>";
+    grid.appendChild(note);
+    $("count").textContent = "agent dashboard";
+    return;
+  }
 
   p.buttons.forEach(function (b, bi) {
     var card = document.createElement("div");
@@ -399,6 +416,7 @@ $("delpage").onclick = function () {
 $("pagename").oninput = function () { page().name = this.value; renderTabs(); };
 $("cols").onchange = function () { page().cols = parseInt(this.value, 10) || 4; renderAll(); };
 $("rows").onchange = function () { page().rows = parseInt(this.value, 10) || 3; renderAll(); };
+$("ptype").onchange = function () { page().kind = this.value; renderAll(); };
 
 load();
 </script>

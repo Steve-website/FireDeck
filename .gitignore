@@ -6,6 +6,7 @@ __pycache__/
 server/layout.json
 server/layout.v1.backup.json
 server/icons/
+server/agent.json
 
 # Bundled third-party tools (LibreHardwareMonitor etc.)
 tools/
