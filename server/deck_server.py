@@ -570,6 +570,15 @@ def _sys_summary(sysd):
             "vram_total": _num(primary.get("memory_total_gb")),
             "power": _num(primary.get("power_draw_w")),
         }
+
+    summary["gpus"] = [{
+        "name": str(d.get("name") or ""),
+        "temp": _num(d.get("temperature_c")),
+        "util": _num(d.get("gpu_utilization_pct")),
+        "vram_used": _num(d.get("vram_used_gb")),
+        "vram_total": _num(d.get("memory_total_gb")),
+        "power": _num(d.get("power_draw_w")),
+    } for d in devices[:8]]
     return summary
 
 

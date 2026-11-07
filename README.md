@@ -21,6 +21,8 @@ Stream Deck style controller with a real touchscreen.
 
 <img src="docs/agents.png" width="840" alt="Agent telemetry page">
 
+<img src="docs/gpus.png" width="840" alt="Per-GPU detail">
+
 <img src="docs/setup.jpg" width="840" alt="FireDeck running on a Kindle Fire HD 7">
 
 *Real setup: FireDeck running on a Kindle Fire HD 7 (3rd gen) next to the PC.*
@@ -152,6 +154,8 @@ OpenAI-compatible **llama.cpp / Unsloth Studio** servers — one card each:
 - prompt / generated / cached token totals
 - **hardware**: GPU name, temperature, VRAM, utilisation and power, plus
   CPU / RAM / disk usage from Unsloth Studio's `/api/system`
+- **tap a card** to expand **every GPU** (individual temps, VRAM bars,
+  utilisation and power)
 - requests processing, busy slots, queue
 - compaction count (Phase 2: agent-side hooks)
 
