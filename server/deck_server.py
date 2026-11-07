@@ -77,7 +77,8 @@ def _nvidia():
              "--query-gpu=name,temperature.gpu,utilization.gpu,utilization.memory,"
              "memory.used,memory.total,power.draw,fan.speed,clocks.current.graphics",
              "--format=csv,noheader,nounits"],
-            timeout=2, stderr=subprocess.DEVNULL).decode("utf-8", "replace").strip()
+            timeout=2, stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).decode("utf-8", "replace").strip()
         p = [x.strip() for x in out.split(",")]
 
         def num(x):

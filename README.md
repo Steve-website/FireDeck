@@ -49,6 +49,19 @@ PC                                        Tablet
 └─────────────────────────┘               └──────────────────────┘
 ```
 
+## Auto-start at login
+
+Run `server\install_startup.ps1` once. It registers two scheduled tasks:
+
+| Task | Runs | Needs admin |
+|---|---|---|
+| **FireDeck Server** | `pythonw.exe` hidden at logon, restarts on failure | no |
+| **FireDeck LibreHardwareMonitor** | LHM at logon for CPU temps | **yes** |
+
+Run the script normally for the server; run it **as Administrator** to also
+auto-start LibreHardwareMonitor. Subprocesses such as `nvidia-smi` are started
+with `CREATE_NO_WINDOW` so nothing flashes on screen.
+
 ## Quick start
 
 1. **Start the server**: `server\start_server.bat`
