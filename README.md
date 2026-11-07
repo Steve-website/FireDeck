@@ -19,6 +19,10 @@ Stream Deck style controller with a real touchscreen.
 
 <img src="docs/config.png" width="840" alt="Browser configuration page">
 
+<img src="docs/setup.jpg" width="840" alt="FireDeck running on a Kindle Fire HD 7">
+
+*Real setup: FireDeck running on a Kindle Fire HD 7 (3rd gen) next to the PC.*
+
 ## Features
 
 - **Multiple pages** with tabs at the bottom of the tablet screen
