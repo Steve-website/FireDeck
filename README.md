@@ -1,8 +1,15 @@
-﻿# FireDeck
+# FireDeck
 
 A Stream Deck style button grid for the **2013 Kindle Fire HD 7"**
 (`soho` / `KFSOWI`, Fire OS 4.5.5.3, Android 4.4.3, API 19), configured
 from the PC in a browser.
+
+## Hardware
+
+This targets the **Amazon Kindle Fire HD 7" (3rd generation, 2013)** —
+codename `soho`, model `KFSOWI`, Fire OS 4.5.5.3 (Android 4.4.3). Used units
+turn up on eBay for around **£10**, making it a very cheap way to get a
+Stream Deck style controller with a real touchscreen.
 
 ## Screenshots
 
@@ -16,21 +23,21 @@ from the PC in a browser.
 
 - **Multiple pages** with tabs at the bottom of the tablet screen
 - **PNG icons** uploaded per button from the config page
-- **Long-press (hold) actions** â€” a second action per button
-- **Macros** â€” multi-step sequences with delays
-- **Live PC stats overlay** â€” CPU, GPU, RAM, temps, network, disk
+- **Long-press (hold) actions** — a second action per button
+- **Macros** — multi-step sequences with delays
+- **Live PC stats overlay** — CPU, GPU, RAM, temps, network, disk
 - Action types: `key`, `hotkey`, `text`, `launch`, `url`, `command`, `macro`, `stats`
 - Config page: <http://localhost:9100>
 
 ```
 PC                                        Tablet
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   HTTP        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ deck_server.py (9100)   â”‚â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚ FireDeck.apk         â”‚
-â”‚  /            config UI â”‚  /layout poll â”‚  pages + tabs        â”‚
-â”‚  /layout      JSON      â”‚  /press       â”‚  PNG icons           â”‚
-â”‚  /press       actions   â”‚  /icon upload â”‚  press + hold        â”‚
-â”‚  /icons/...   images    â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–ºâ”‚                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜               â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────┐   HTTP        ┌──────────────────────┐
+│ deck_server.py (9100)   │◄──────────────│ FireDeck.apk         │
+│  /            config UI │  /layout poll │  pages + tabs        │
+│  /layout      JSON      │  /press       │  PNG icons           │
+│  /press       actions   │  /icon upload │  press + hold        │
+│  /icons/...   images    │──────────────►│                      │
+└─────────────────────────┘               └──────────────────────┘
 ```
 
 ## Quick start
@@ -43,18 +50,18 @@ PC                                        Tablet
 
 Saving in the browser updates the tablet within ~3 seconds.
 
-> After restarting the server, click **Reload** in the browser before editing â€”
+> After restarting the server, click **Reload** in the browser before editing —
 > otherwise you may save a stale layout over the current one.
 
 ## Config page
 
 - **Pages**: tabs at the top, `+ page` to add, `Delete page` to remove.
-- **Grid size**: columns/rows per page (1â€“8).
+- **Grid size**: columns/rows per page (1–8).
 - **Button card**:
   - colour, icon text, label
   - **Upload PNG icon** (stored in `server/icons/`)
   - action type + value
-  - **Hold action** checkbox â†’ long-press action
+  - **Hold action** checkbox → long-press action
   - **Test** / **Test hold**
 - **Save all** writes to `server/layout.json`.
 
@@ -95,7 +102,7 @@ A button with `"type": "stats"` opens a live dashboard on the tablet
 - **CPU / GPU gauge cards** with temperature, clocks, VRAM, power, fan and
   the current top process
 - **RAM / TEMP / NETWORK / DISK** tiles with bars and rolling sparklines
-- colours change green â†’ amber â†’ red at 60 % / 85 %
+- colours change green → amber → red at 60 % / 85 %
 
 | Tile | Source |
 |---|---|
@@ -113,7 +120,7 @@ Windows does not expose CPU package temperature to normal apps.
 LibreHardwareMonitor is bundled at `tools\LibreHardwareMonitor\` and its web
 server is pre-configured (`LibreHardwareMonitor.config`, port 8085). It needs
 to run **as administrator** to read CPU sensors; start it before gaming and
-enable *Options â†’ Auto Start* if you want it at login.
+enable *Options → Auto Start* if you want it at login.
 
 Without LHM the TEMP tile falls back to GPU temperature and the CPU card shows
 `n/a`.
@@ -176,9 +183,9 @@ mandatory** for API 19.
 ## Notes
 
 - The tablet UI is landscape; the Fire HD 7 panel reports its raw portrait
-  framebuffer to `screencap`, so screenshots may need a 90Â°/180Â° rotation.
+  framebuffer to `screencap`, so screenshots may need a 90°/180° rotation.
 - Icons are cached by URL; re-uploading creates a new URL and refreshes.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
